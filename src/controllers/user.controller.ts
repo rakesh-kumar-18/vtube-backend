@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response } from "express";
+import { Request, Response } from "express";
 import asyncHandler from "../utils/asyncHandler";
 import ApiError from "../utils/ApiError";
 import { User } from "../models/user.model";
@@ -18,64 +18,66 @@ interface MulterRequest extends Request {
     };
 }
 
-export const registerUser = asyncHandler(async (req: MulterRequest, res) => {
-    const { username, email, fullName, password }: RequestBody = req.body;
+export const registerUser = asyncHandler(
+    async (req: MulterRequest, res: Response) => {
+        const { username, email, fullName, password }: RequestBody = req.body;
 
-    if (
-        [username, email, fullName, password].some(
-            (field) => field.trim() === ""
+        if (
+            [username, email, fullName, password].some(
+                (field) => field.trim() === ""
+            )
         )
-    )
-        throw new ApiError(400, "All fields are required");
+            throw new ApiError(400, "All fields are required");
 
-    const isUserExist = await User.findOne({
-        $or: [{ username }, { email }],
-    });
+        const isUserExist = await User.findOne({
+            $or: [{ username }, { email }],
+        });
 
-    if (isUserExist)
-        throw new ApiError(
-            409,
-            "User with this username or email already exist"
+        if (isUserExist)
+            throw new ApiError(
+                409,
+                "User with this username or email already exist"
+            );
+
+        const avatarLocalPath = req.files?.avatar[0]?.path;
+        const coverImageLocalPath = req.files?.coverImage[0]?.path;
+
+        if (!avatarLocalPath)
+            throw new ApiError(400, "Avatar file is required");
+
+        const avatarResponse = await uploadOnCloudinary(avatarLocalPath);
+        const coverImageResponse =
+            await uploadOnCloudinary(coverImageLocalPath);
+
+        if (!avatarResponse) throw new ApiError(400, "Avatar file is required");
+
+        const avatar = avatarResponse.url;
+        const coverImage = coverImageResponse?.url || "";
+
+        const user = await User.create({
+            username: username.toLowerCase(),
+            email,
+            fullName,
+            avatar,
+            coverImage,
+            password,
+        });
+
+        const createdUser = await User.findById(user._id).select(
+            "-password -refreshToken"
         );
 
-    const avatarLocalPath = req.files?.avatar[0]?.path;
-    const coverImageLocalPath = req.files?.coverImage[0]?.path;
+        if (!createdUser)
+            throw new ApiError(
+                500,
+                "Something went wrong while registering the user"
+            );
 
-    if (!avatarLocalPath) throw new ApiError(400, "Avatar file is required");
-
-    const avatarResponse = await uploadOnCloudinary(avatarLocalPath);
-    const coverImageResponse = await uploadOnCloudinary(coverImageLocalPath);
-
-    if (!avatarResponse) throw new ApiError(400, "Avatar file is required");
-
-    const avatar = avatarResponse.url;
-    const coverImage = coverImageResponse?.url || "";
-
-    const user = await User.create({
-        username: username.toLowerCase(),
-        email,
-        fullName,
-        avatar,
-        coverImage,
-        password,
-    });
-
-    const createdUser = await User.findById(user._id).select(
-        "-password, -refreshToken"
-    );
-
-    if (!createdUser)
-        throw new ApiError(
-            500,
-            "Something went wrong while registering the user"
+        const apiResponse = new ApiResponse<typeof createdUser>(
+            201,
+            createdUser,
+            "User registered successfully"
         );
-
-    const apiResponse = new ApiResponse<typeof createdUser>(
-        201,
-        createdUser,
-        "User registered successfully"
-    );
-    res.status(201).json(apiResponse);
-});
-
-export const loginUser = asyncHandler(async (req, res, next) => {});
+        res.status(201).json(apiResponse);
+    }
+);
