@@ -7,7 +7,10 @@ const cleanupFiles = (req: MulterRequest): void => {
             req.files[key].forEach((file) => {
                 fs.unlink(file.path, (unlinkErr) => {
                     if (unlinkErr) {
-                        console.error(`Failed to delete file: ${file.path}`, unlinkErr);
+                        console.error(
+                            `Failed to delete file: ${file.path}`,
+                            unlinkErr
+                        );
                     }
                 });
             });
