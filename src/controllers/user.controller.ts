@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import asyncHandler from "../utils/asyncHandler";
 import ApiError from "../utils/ApiError";
 import { User } from "../models/user.model";
@@ -12,19 +12,22 @@ interface RequestBody {
     password: string;
 }
 
-interface MulterRequest extends Request {
+export interface MulterRequest extends Request {
     files: {
         [fieldName: string]: Express.Multer.File[];
     };
 }
 
 export const registerUser = asyncHandler(
-    async (req: MulterRequest, res: Response) => {
+    async (req: MulterRequest, res: Response, next: NextFunction) => {
         const { username, email, fullName, password }: RequestBody = req.body;
+
+        const avatarLocalPath: string = req.files?.avatar?.[0]?.path;
+        const coverImageLocalPath: string = req.files?.coverImage?.[0]?.path;
 
         if (
             [username, email, fullName, password].some(
-                (field) => field.trim() === ""
+                (field) => !field || field.trim() === ""
             )
         )
             throw new ApiError(400, "All fields are required");
@@ -39,13 +42,11 @@ export const registerUser = asyncHandler(
                 "User with this username or email already exist"
             );
 
-        const avatarLocalPath = req.files?.avatar[0]?.path;
-        const coverImageLocalPath = req.files?.coverImage[0]?.path;
-
         if (!avatarLocalPath)
             throw new ApiError(400, "Avatar file is required");
 
         const avatarResponse = await uploadOnCloudinary(avatarLocalPath);
+
         const coverImageResponse =
             await uploadOnCloudinary(coverImageLocalPath);
 

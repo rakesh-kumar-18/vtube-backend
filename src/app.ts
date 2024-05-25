@@ -12,8 +12,11 @@ app.use(cookieParser());
 
 // router import
 import userRouter from "./routes/user.routes";
+import errorHandler from "./middlewares/errorHandler.middleware";
 
 //  routes declaration
 app.use("/api/v1/users", userRouter);
+
+app.use(errorHandler);
 
 export default app;
