@@ -2,15 +2,18 @@ import { model, Schema, Types } from "mongoose";
 import jwt, { Secret } from "jsonwebtoken";
 import { compare, hash } from "bcrypt";
 
-interface IUser {
+export interface IUser {
     username: string;
     email: string;
     fullName: string;
     avatar: string;
     coverImage: string;
     password: string;
-    refreshToken: string;
+    refreshToken: string | null;
     watchHistory: Types.ObjectId[];
+    isValidPassword(password: string): Promise<boolean>;
+    generateAccessToken(): string;
+    generateRefreshToken(): string;
 }
 
 const userSchema = new Schema<IUser>(
@@ -49,6 +52,7 @@ const userSchema = new Schema<IUser>(
         },
         refreshToken: {
             type: String,
+            default: null
         },
         watchHistory: [
             {
