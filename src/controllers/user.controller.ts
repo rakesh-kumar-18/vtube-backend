@@ -6,6 +6,7 @@ import uploadOnCloudinary from "../utils/cloudinary";
 import ApiResponse from "../utils/ApiResponse";
 import generateTokens from "../utils/generateTokens";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
+import { OPTIONS } from "../constants";
 
 interface RequestBody {
     username: string;
@@ -108,13 +109,8 @@ export const loginUser = asyncHandler(
             refreshToken,
         }).select("-password -refreshToken");
 
-        const options = {
-            httpOnly: true,
-            secure: true,
-        };
-
-        res.cookie("accessToken", accessToken, options);
-        res.cookie("refreshToken", refreshToken, options);
+        res.cookie("accessToken", accessToken, OPTIONS);
+        res.cookie("refreshToken", refreshToken, OPTIONS);
 
         const apiResponse = new ApiResponse(
             200,
@@ -131,21 +127,16 @@ export const logoutUser = asyncHandler(
 
         if (!user) throw new ApiError(400, "Invalid User Id");
 
-        await User.findByIdAndUpdate(user._id, { refreshToken: null }, {new: true});
-
-        const options = {
-            httpOnly: true,
-            secure: true,
-        };
-
-        res.clearCookie("accessToken", options);
-        res.clearCookie("refreshToken", options);
-
-        const apiResponse = new ApiResponse(
-            200,
-            {},
-            "Logout successful"
+        await User.findByIdAndUpdate(
+            user._id,
+            { refreshToken: null },
+            { new: true }
         );
+
+        res.clearCookie("accessToken", OPTIONS);
+        res.clearCookie("refreshToken", OPTIONS);
+
+        const apiResponse = new ApiResponse(200, {}, "Logout successful");
         res.status(200).json(apiResponse);
     }
 );

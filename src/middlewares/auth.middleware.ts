@@ -6,9 +6,10 @@ import { IUser, User } from "../models/user.model";
 import { Document, Types } from "mongoose";
 
 export interface AuthenticatedRequest extends Request {
-    user: Document<unknown, {}, IUser> & IUser & {
-        _id: Types.ObjectId;
-    };
+    user: Document<unknown, {}, IUser> &
+        IUser & {
+            _id: Types.ObjectId;
+        };
 }
 
 const isAuthenticated = asyncHandler(
