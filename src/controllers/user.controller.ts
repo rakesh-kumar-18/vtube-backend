@@ -8,6 +8,7 @@ import generateTokens from "../utils/generateTokens";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { OPTIONS } from "../constants";
 import { TokenBlacklist } from "../models/tokenBlacklist.model";
+import jwt, { JwtPayload, Secret } from "jsonwebtoken";
 
 interface RequestBody {
     username: string;
@@ -128,7 +129,7 @@ export const logoutUser = asyncHandler(
 
         if (!user) throw new ApiError(400, "Invalid User Id");
 
-        const accessToken = req.cookies.accessToken;
+        const accessToken: string = req.cookies.accessToken;
         await TokenBlacklist.create({ token: accessToken });
 
         await User.findByIdAndUpdate(
@@ -142,5 +143,43 @@ export const logoutUser = asyncHandler(
 
         const apiResponse = new ApiResponse(200, {}, "Logout successful");
         res.status(200).json(apiResponse);
+    }
+);
+
+export const refreshAccessToken = asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+        const token: string =
+            req.cookies?.refreshToken ||
+            req.headers["authorization"]?.split(" ")[1];
+
+        if (!token) throw new ApiError(401, "Refresh token is missing");
+
+        try {
+            const decoded = jwt.verify(
+                token,
+                process.env.REFRESH_TOKEN_SECRET as Secret
+            ) as JwtPayload;
+
+            const user = await User.findById(decoded?._id);
+
+            if (!user || user.refreshToken !== token)
+                throw new ApiError(401, "Invalid refresh token");
+
+            const { accessToken } = await generateTokens(user);
+
+            res.cookie("accessToken", accessToken, OPTIONS);
+            const apiResponse = new ApiResponse(
+                200,
+                { accessToken },
+                "Access token refresh"
+            );
+            res.status(200).json(apiResponse);
+        } catch (error) {
+            if (error instanceof Error)
+                throw new ApiError(
+                    401,
+                    error.message || "Invalid refresh token"
+                );
+        }
     }
 );
