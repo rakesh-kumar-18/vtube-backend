@@ -7,6 +7,7 @@ import ApiResponse from "../utils/ApiResponse";
 import generateTokens from "../utils/generateTokens";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { OPTIONS } from "../constants";
+import { TokenBlacklist } from "../models/tokenBlacklist.model";
 
 interface RequestBody {
     username: string;
@@ -114,7 +115,7 @@ export const loginUser = asyncHandler(
 
         const apiResponse = new ApiResponse(
             200,
-            { ...loggedInUser, accessToken, refreshToken },
+            { loggedInUser, accessToken, refreshToken },
             "Login successful"
         );
         res.status(200).json(apiResponse);
@@ -126,6 +127,9 @@ export const logoutUser = asyncHandler(
         const user = req.user;
 
         if (!user) throw new ApiError(400, "Invalid User Id");
+
+        const accessToken = req.cookies.accessToken;
+        await TokenBlacklist.create({ token: accessToken });
 
         await User.findByIdAndUpdate(
             user._id,

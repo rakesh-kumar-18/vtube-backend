@@ -3,37 +3,47 @@ import jwt, { JwtPayload, Secret } from "jsonwebtoken";
 import ApiError from "../utils/ApiError";
 import asyncHandler from "../utils/asyncHandler";
 import { IUser, User } from "../models/user.model";
-import { Document, Types } from "mongoose";
+import { TokenBlacklist } from "../models/tokenBlacklist.model";
 
 export interface AuthenticatedRequest extends Request {
-    user: Document<unknown, {}, IUser> &
-        IUser & {
-            _id: Types.ObjectId;
-        };
+    user: IUser;
 }
 
 const isAuthenticated = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-        const token: string =
-            req.cookies?.accessToken ||
-            (req.headers?.authorization?.startsWith("Bearer ") &&
-                req.headers.authorization.split(" ")[1]);
+        try {
+            const token: string =
+                req.cookies?.accessToken ||
+                (req.headers?.authorization?.startsWith("Bearer ") &&
+                    req.headers.authorization.split(" ")[1]);
 
-        if (!token) throw new ApiError(401, "No token, authorization denied");
+            if (!token)
+                throw new ApiError(401, "No token, authorization denied");
 
-        const payload = jwt.verify(
-            token,
-            process.env.ACCESS_TOKEN_SECRET as Secret
-        ) as JwtPayload;
+            const isBlacklisted = await TokenBlacklist.findOne({ token });
+            if (isBlacklisted)
+                throw new ApiError(401, "Token has been invalidated");
 
-        const user = await User.findById(payload?._id).select(
-            "-password -refreshToken"
-        );
+            const decoded = jwt.verify(
+                token,
+                process.env.ACCESS_TOKEN_SECRET as Secret
+            ) as JwtPayload;
 
-        if (!user) throw new ApiError(401, "Invalid Access Token");
+            const user = await User.findById(decoded?._id).select(
+                "-password -refreshToken"
+            );
 
-        req.user = user;
-        next();
+            if (!user) throw new ApiError(401, "Invalid Access Token");
+
+            req.user = user;
+            next();
+        } catch (error) {
+            if (error instanceof Error)
+                throw new ApiError(
+                    400,
+                    error.message || "Invalid access token"
+                );
+        }
     }
 );
 
