@@ -127,8 +127,6 @@ export const logoutUser = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
         const user = req.user;
 
-        if (!user) throw new ApiError(400, "Invalid User Id");
-
         const accessToken: string = req.cookies.accessToken;
         await TokenBlacklist.create({ token: accessToken });
 
@@ -181,5 +179,43 @@ export const refreshAccessToken = asyncHandler(
                     error.message || "Invalid refresh token"
                 );
         }
+    }
+);
+
+export const changePassword = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+        const { currPassword, newPassword, confPassword } = req.body;
+
+        if (!currPassword || !newPassword || !confPassword)
+            throw new ApiError(400, "All fields are required");
+
+        const user = (await User.findById(req.user?._id))!;
+
+        const isPasswordValid = await user.isValidPassword(currPassword);
+
+        if (!isPasswordValid)
+            throw new ApiError(400, "Invalid current password");
+
+        if (currPassword === newPassword)
+            throw new ApiError(
+                400,
+                "New password can't be same as old password"
+            );
+
+        if (newPassword !== confPassword)
+            throw new ApiError(
+                400,
+                "Both new and confirm password field should match"
+            );
+
+        user.password = newPassword;
+        await user.save({ validateBeforeSave: false });
+
+        const apiResponse = new ApiResponse(
+            200,
+            {},
+            "Password changed successfully"
+        );
+        res.status(200).json(apiResponse);
     }
 );
