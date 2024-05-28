@@ -1,10 +1,12 @@
 import { Router } from "express";
 import {
     changePassword,
+    getCurrentUser,
     loginUser,
     logoutUser,
     refreshAccessToken,
     registerUser,
+    updateAccountDetails,
 } from "../controllers/user.controller";
 import { upload } from "../middlewares/multer.middleware";
 import isAuthenticated from "../middlewares/auth.middleware";
@@ -24,5 +26,7 @@ router.route("/login").post(loginUser);
 router.route("/logout").post(isAuthenticated, logoutUser);
 router.route("/refresh-token").post(refreshAccessToken);
 router.route("/change-password").post(isAuthenticated, changePassword);
+router.route("/current-user").get(isAuthenticated, getCurrentUser);
+router.route("/update-account").post(isAuthenticated, updateAccountDetails);
 
 export default router;

@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import asyncHandler from "../utils/asyncHandler";
 import ApiError from "../utils/ApiError";
-import { User } from "../models/user.model";
+import { IUser, User } from "../models/user.model";
 import uploadOnCloudinary from "../utils/cloudinary";
 import ApiResponse from "../utils/ApiResponse";
 import generateTokens from "../utils/generateTokens";
@@ -127,6 +127,8 @@ export const logoutUser = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
         const user = req.user;
 
+        if (!user) throw new ApiError(404, "User not found");
+
         const accessToken: string = req.cookies.accessToken;
         await TokenBlacklist.create({ token: accessToken });
 
@@ -191,6 +193,8 @@ export const changePassword = asyncHandler(
 
         const user = (await User.findById(req.user?._id))!;
 
+        if (!user) throw new ApiError(404, "User not found");
+
         const isPasswordValid = await user.isValidPassword(currPassword);
 
         if (!isPasswordValid)
@@ -215,6 +219,47 @@ export const changePassword = asyncHandler(
             200,
             {},
             "Password changed successfully"
+        );
+        res.status(200).json(apiResponse);
+    }
+);
+
+export const getCurrentUser = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+        const user = req.user;
+
+        if (!user) throw new ApiError(404, "User not found");
+
+        const apiResponse = new ApiResponse(
+            200,
+            user,
+            "Current user fetched successfully"
+        );
+        res.status(200).json(apiResponse);
+    }
+);
+
+export const updateAccountDetails = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+        const { fullName, email } = req.body;
+
+        if (!fullName.trim() && !email.trim())
+            throw new ApiError(400, "At least one field must be provided");
+
+        const updateFields: Partial<IUser> = {};
+        if (fullName.trim()) updateFields.fullName = fullName;
+        if (email.trim()) updateFields.email = email;
+
+        const user = await User.findByIdAndUpdate(req.user?.id, updateFields, {
+            new: true,
+        }).select("-password -refreshToken");
+
+        if (!user) throw new ApiError(404, "User not found");
+
+        const apiResponse = new ApiResponse(
+            200,
+            user,
+            "Account details updated successfully"
         );
         res.status(200).json(apiResponse);
     }
