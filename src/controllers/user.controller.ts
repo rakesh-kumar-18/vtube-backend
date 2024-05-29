@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import asyncHandler from "../utils/asyncHandler";
 import ApiError from "../utils/ApiError";
 import { IUser, User } from "../models/user.model";
-import uploadOnCloudinary from "../utils/cloudinary";
+import { deleteFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary";
 import ApiResponse from "../utils/ApiResponse";
 import generateTokens from "../utils/generateTokens";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
@@ -56,15 +56,17 @@ export const registerUser = asyncHandler(
 
         if (!avatarResponse) throw new ApiError(400, "Avatar file is required");
 
-        const avatar = avatarResponse.url;
-        const coverImage = coverImageResponse?.url || "";
+        const avatarUrl = avatarResponse.url;
+        const coverImageUrl = coverImageResponse?.url || "";
+        const avatarId = avatarResponse.public_id;
+        const coverImageId = coverImageResponse?.public_id || "";
 
         const user = await User.create({
             username: username.toLowerCase(),
             email,
             fullName,
-            avatar,
-            coverImage,
+            avatar: { url: avatarUrl, public_id: avatarId },
+            coverImage: { url: coverImageUrl, public_id: coverImageId },
             password,
         });
 
@@ -186,9 +188,14 @@ export const refreshAccessToken = asyncHandler(
 
 export const changePassword = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-        const { currPassword, newPassword, confPassword } = req.body;
+        const {
+            currPassword,
+            newPassword,
+            confPassword,
+        }: { currPassword: string; newPassword: string; confPassword: string } =
+            req.body;
 
-        if (!currPassword || !newPassword || !confPassword)
+        if (!currPassword.trim() || !newPassword.trim() || !confPassword.trim())
             throw new ApiError(400, "All fields are required");
 
         const user = (await User.findById(req.user?._id))!;
@@ -276,15 +283,20 @@ export const updateUserAvatar = asyncHandler(
 
         if (!avatarResponse) throw new ApiError(400, "Avatar file is required");
 
-        const avatar = avatarResponse.url;
+        const avatarUrl = avatarResponse.url;
+        const avatarId = avatarResponse.public_id;
 
-        const user = User.findByIdAndUpdate(
+        const oldAvatarId = req.user?.avatar.public_id;
+
+        const user = await User.findByIdAndUpdate(
             req.user?._id,
-            { avatar },
+            { avatar: { url: avatarUrl, public_id: avatarId } },
             { new: true }
         ).select("-password -refreshToken");
 
         if (!user) throw new ApiError(404, "User not found");
+
+        await deleteFromCloudinary(oldAvatarId);
 
         const apiResponse = new ApiResponse(
             200,
@@ -308,15 +320,20 @@ export const updateUserCoverImage = asyncHandler(
         if (!coverImageResponse)
             throw new ApiError(400, "Cover image file is required");
 
-        const coverImage = coverImageResponse.url;
+        const coverImageUrl = coverImageResponse.url;
+        const coverImageId = coverImageResponse.public_id;
 
-        const user = User.findByIdAndUpdate(
+        const oldCoverImageId = req.user?.coverImage?.public_id;
+
+        const user = await User.findByIdAndUpdate(
             req.user?._id,
-            { coverImage },
+            { coverImage: { url: coverImageUrl, public_id: coverImageId } },
             { new: true }
         ).select("-password -refreshToken");
 
         if (!user) throw new ApiError(404, "User not found");
+
+        await deleteFromCloudinary(oldCoverImageId);
 
         const apiResponse = new ApiResponse(
             200,
