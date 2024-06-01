@@ -9,6 +9,7 @@ import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { OPTIONS } from "../constants";
 import { TokenBlacklist } from "../models/tokenBlacklist.model";
 import jwt, { JwtPayload, Secret } from "jsonwebtoken";
+import { Types } from "mongoose";
 
 interface RequestBody {
     username: string;
@@ -339,6 +340,127 @@ export const updateUserCoverImage = asyncHandler(
             200,
             user,
             "Cover image updated successfully"
+        );
+        res.status(200).json(apiResponse);
+    }
+);
+
+export const getChannelDetails = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+        const { username } = req.params;
+
+        if (!username?.trim()) throw new ApiError(400, "username is missing");
+
+        const channel = await User.aggregate([
+            {
+                $match: { username: username?.toLowerCase() },
+            },
+            {
+                $lookup: {
+                    from: "subscriptions",
+                    localField: "_id",
+                    foreignField: "channel",
+                    as: "subscribers",
+                },
+            },
+            {
+                $lookup: {
+                    from: "subscriptions",
+                    localField: "_id",
+                    foreignField: "subscriber",
+                    as: "subscribedTo",
+                },
+            },
+            {
+                $addFields: {
+                    totalSubscribers: { $size: "$subscribers" },
+                    totalSubscribedTo: { $size: "$subscribedTo" },
+                    isSubscribed: {
+                        $cond: {
+                            if: {
+                                $in: [req.user?._id, "$subscribers.subscriber"],
+                            },
+                            then: true,
+                            else: false,
+                        },
+                    },
+                },
+            },
+            {
+                $project: {
+                    username: 1,
+                    fullName: 1,
+                    avatar: 1,
+                    coverImage: 1,
+                    totalSubscribers: 1,
+                    totalSubscribedTo: 1,
+                    isSubscribed: 1,
+                },
+            },
+        ]);
+
+        console.log(channel);
+
+        if (!channel?.length)
+            throw new ApiError(404, "channel does not exists");
+
+        const apiResponse = new ApiResponse(
+            200,
+            channel[0],
+            "channel details fetched successfully"
+        );
+        res.status(200).json(apiResponse);
+    }
+);
+
+export const getWatchHistory = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+        const user = await User.aggregate([
+            {
+                $match: {
+                    _id: new Types.ObjectId(req.user._id as string),
+                },
+            },
+            {
+                $lookup: {
+                    from: "videos",
+                    localField: "watchHistory",
+                    foreignField: "_id",
+                    as: "watchHistory",
+                    pipeline: [
+                        {
+                            $lookup: {
+                                from: "users",
+                                localField: "owner",
+                                foreignField: "_id",
+                                as: "owner",
+                                pipeline: [
+                                    {
+                                        $project: {
+                                            username: 1,
+                                            fullName: 1,
+                                            avatar: 1,
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                        {
+                            $addFields: {
+                                owner: { $first: "$owner" },
+                            },
+                        },
+                    ],
+                },
+            },
+        ]);
+
+        console.log(user);
+
+        const apiResponse = new ApiResponse(
+            200,
+            user[0]?.watchHistory,
+            "watch history fetched successfully"
         );
         res.status(200).json(apiResponse);
     }
